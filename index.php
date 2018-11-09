@@ -7,30 +7,28 @@ if ($output[0] === "No syntax errors detected in config.php") {
     setDefaultValues();
 }
 
-
-// $aIds = array();
-//            if (Zend_Registry::get('config')->sale_collection->mode == 1) $aIds[] = Zend_Registry::get('config')->sale_collection->id;
-////            if (Zend_Registry::get('config')->outlet_collection->mode == 1) $aIds[] = Zend_Registry::get('config')->outlet_collection->id; // wyłączenie outletu http://task.info.kazar.com/issues/1736
-//            $sIds = implode(',', $aIds);
-//            
-//            if ($sIds == null) $sIds = 0;
-
-
-
 $gameState = unserialize($gameState);
 $actors = unserialize($actors);
 
 $game = new Game($gameState, $actors);
 
 if ($_POST != null) {
-    $game->parseAction($_POST);
+    if ($game->parseAction($_POST) === true) {
+        echo ' true';
+        $game->actors->checkStatus();
+        $game->actors->showControls();
+        $game->actors->showStatus();
+        $game->displayErrors();
+        $game->endTurn();
+        $game->saveState();
+    } else {
+        echo ' false';
+        $game->actors->showControls();
+        $game->actors->showStatus();
+        $game->displayErrors();
+//        $game->saveState();
+    }
 }
-
-$game->actors->checkStatus();
-$game->actors->showControls();
-$game->actors->showStatus();
-$game->displayErrors();
-$game->saveState();
 
 class Game {
 
@@ -44,37 +42,71 @@ class Game {
         if (!empty($actors)) {
             $this->actors = $actors;
         } else {
-            $player = new Actor($type = 'player', $name = 'Faggot', $effects = array('alive' => 1), $stats = array('hp' => 10), $inventory = array('gold' => 0));
+            $player = new Actor($type = 'player', $name = 'Faggot', $effects = array('alive' => 1), $stats = array(
+                'hp' => 10,
+                'hp_max' => 10,
+                'ep' => 80,
+                'ep_max' => 100,
+                    ), $inventory = array()
+            );
             $this->actors = $player;
         }
     }
 
     function parseAction($_POST) {
-        if ($_POST['wait'] == 'wait') {
-            $this->actors->stats['hp'] += 0.2;
-        } else if ($_POST['fight'] == 'fight') {
-            $this->actors->stats['hp'] --;
-            $this->actors->inventory['gold'] ++;
-        } else if ($_POST['restart'] == 'restart') {
-            $this->actors->stats['hp'] = 10;
-            $this->actors->effects['alive'] = true;
-        } else {
-            $this->errors .= 'Unrecognized command.<br>';
+        switch ($_POST['action']) {
+            case 'wait':
+                $this->actors->alterStat('hp', 0.05);
+                $this->actors->alterStat('ep', 2);
+                break;
+
+            case 'forage':
+                $this->actors->alterStat('ep', -3);
+                $this->actors->alterInventory('food', 1);
+                break;
+
+            case 'eat':
+                if ($this->actors->alterInventory('food', -1) === true) {
+                    $this->actors->alterStat('fp', +10);
+                } else {
+                    $this->addError('Not enough food!');
+                echo 'why is this?';
+                    return false;
+                }
+                echo 'even here?';
+                break;
+
+            case 'restart':
+                $this->actors->setDefaults();
+            default:
+                $this->addError('Unrecognized command.<br>');
+                return false;
         }
+        echo 'twat';
+        return true;
     }
 
     function displayErrors() {
         if (!empty($this->errors)) {
             print_r($this->errors);
-            exit;
+//            exit;
         }
     }
 
+    function endTurn() {
+        $this->actors->alterStat('hp', 0.02);
+        $this->actors->alterStat('ep', -0.5);
+    }
+
     function saveState() {
-        
+
         file_put_contents("config.php", "<?php 
                 $" . "gameState = '" . serialize($this->gameState) . "';
                 $" . "actors = '" . serialize($this->actors) . "';");
+    }
+
+    function addError($error) {
+        $this->errors .= $error;
     }
 
 }
@@ -82,60 +114,108 @@ class Game {
 class Actor {
 
     function __construct($type, $name, $effects, $stats, $inventory) {
-        $this->type = $type;
-        $this->name = $name;
+        $this->type = $type ?: 'unknown';
+        $this->name = $name ?: 'unknown';
+
         $this->effects = $effects;
         $this->stats = $stats;
         $this->inventory = $inventory;
     }
-    
-    
+
     function checkStatus() {
 
-        if ($this->stats['hp'] <= 0) {
+        if ($this->stats['hp'] < 0) {
             $this->effects['alive'] = false;
-            $this->inventory['gold'] = 0;
         }
+    }
+
+    function alterStat($type, $amount) {
+        $this->stats[$type] += $amount;
+        if ((isset($this->stats[$type . '_max'])) && ($this->stats[$type] > $this->stats[$type . '_max'])) {
+            $this->stats[$type] = $this->stats[$type . '_max'];
+        }
+    }
+
+    function alterInventory($type, $amount) {
+        $this->inventory[$type] += $amount;
+        if ($this->inventory[$type] < 0) {
+            $this->inventory[$type] = 0;
+            return false;
+        }
+        return true;
     }
 
     function showControls() {
         if ($this->effects['alive'] == true) {
-            $this->showCombatControls();
+            $this->showMainControls();
         } else {
             $this->showRestartControls();
         }
     }
 
-    function showCombatControls() {
+    function showMainControls() {
         echo
-        "<form action='index.php' method='post' >
-            <button type='submit' name='fight' value='fight' class='w3-button w3-theme-d1 w3-margin-bottom'><i class='fa fa-thumbs-up'></i> Engage </button> 
+        "<form action='index.php' method='post' >" .
+        $this->showForageControls() .
+        $this->showEatControls() .
+        $this->showWaitControls() .
+        $this->showRestartControls() . //temporary
+        "</form>";
+    }
 
-            <button type='submit' name='pay off' value='pay off' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Pay off </button> 
+    function showForageControls() {
+        return "<button type='submit' name='action' value='forage' class='w3-button w3-theme-d1 w3-margin-bottom'><i class='fa fa-thumbs-up'></i> Forage </button>";
+    }
 
-            <button type='submit' name='wait' value='wait' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Wait </button> 
-        </form>
-        <div style='background-color: #FF0000'>TEST</div>";
+    function showEatControls() {
+        return "<button type='submit' name='action' value='eat' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Eat </button>";
+    }
+
+    function showWaitControls() {
+        return "<button type='submit' name='action' value='wait' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Wait </button>";
     }
 
     function showRestartControls() {
-        echo
-        "<form action='index.php' method='post' >
-            <button type='submit' name='restart' value='restart' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Restart </button> 
-        </form>";
+        return "<button type='submit' name='action' value='restart' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Restart </button>";
     }
 
     function showStatus() {
         if ($this->effects['alive'] == false) {
             echo 'BEPIS';
         } else {
-            echo('HP: ' . $this->stats['hp'] . '<br>');
-            echo('GP: ' . $this->inventory['gold'] . '<br>');
+            foreach ($this->effects as $key => $value) {
+                echo '<pre>' . $key . ': ' . $value . '</pre>';
+            }
+            foreach ($this->stats as $key => $value) {
+                echo '<pre>' . $key . ': ' . $value . '</pre>';
+            }
+            foreach ($this->inventory as $key => $value) {
+                echo '<pre>' . $key . ': ' . $value . '</pre>';
+            }
         }
     }
 
-    
+    function setDefaults() {
+        $this->effects = array(
+            'alive' => true
+        );
+        $this->stats = array(
+            'hp' => 96,
+            'hp_max' => 100,
+            'ep' => 80,
+            'ep_max' => 100,
+            'fp' => 40,
+            'fp_max' => 100
+        );
+        $this->inventory = array();
+    }
 
+}
+
+function setDefaultValues() {
+    $gameState = array(
+        'turn' => 0
+    );
 }
 
 //class Player extends Actor {
@@ -153,26 +233,6 @@ class Actor {
 //    }
 //
 //}
-
-function setDefaultValues() {
-    $gameState = array(
-        'turn' => 0
-    );
-
-    $effects = array(
-        'alive' => 1
-    );
-
-    $stats = array(
-        'hp' => 10
-    );
-
-    $inventory = array(
-        'gold' => 0
-    );
-
-}
-
 //$number = rand(1,10);
 //
 //var_dump($number);
