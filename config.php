@@ -1,0 +1,3 @@
+<?php 
+                $gameState = 'a:0:{}';
+                $actors = 'a:1:{s:6:"player";O:6:"Player":5:{s:4:"type";s:6:"player";s:4:"name";s:6:"Faggot";s:7:"effects";a:1:{s:5:"alive";b:1;}s:5:"stats";a:9:{s:2:"hp";i:75;s:6:"hp_max";i:75;s:2:"ep";d:70.859999999999999;s:6:"ep_max";i:75;s:2:"fp";i:63;s:6:"fp_max";i:75;s:11:"hpRegenRate";d:0.10271111111111111;s:11:"epRegenRate";d:1.2333333333333334;s:13:"hpCunsumeRate";d:0.73333333333333339;}s:9:"inventory";a:2:{s:4:"food";i:37;s:7:"coppers";i:125;}}}';

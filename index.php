@@ -1,3 +1,5 @@
+<body style="background-color: grey">
+
 <?php
 
 require_once 'game.php';
@@ -17,19 +19,17 @@ if ($output[0] === "No syntax errors detected in config.php" && filesize("config
 }
 
 $game = new Game($gameState, $actors);
-print_r($game);
+
 if ($_POST != null) {
-    if ($game->parseAction($_POST) === true) {
-//        $game->endTurn();
+    if ($game->parseAction($_POST, 'player') === true) {
         $game->saveState();
     }
     $game->displayErrors();
-    $game->actors->player->checkStatus();
     $game->showActorControls();
-    $game->actors->showStatus();
+    $game->actors['player']->showStatus();
 } else {
     $game->showActorControls();
-    $game->actors->showStatus();
+    $game->actors['player']->showStatus();
     $game->displayErrors();
     $game->saveState();
 }
@@ -39,3 +39,7 @@ function setDefaultValues() {
     $gameState = array();
     $actors = array();
 }
+
+?>
+</body>
+

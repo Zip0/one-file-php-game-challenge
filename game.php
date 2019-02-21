@@ -17,36 +17,37 @@ class Game {
         }
     }
 
-    function parseAction($_POST) {
+    function parseAction($_POST, $actor) {
         switch ($_POST['action']) {
-            case 'wait':
-                $this->actors->calculatePassiveStatChange();
-                $this->actors->wait();
-                break;
-
-            case 'rest':
-                $this->actors->calculatePassiveStatChange();
-                $this->actors->rest();
-                break;
-
+            
             case 'forage':
-                $this->actors->calculatePassiveStatChange();
-                $this->actors->forage();
+                $this->actors[$actor]->calculatePassiveStatChange();
+                $this->actors[$actor]->forage();
                 break;
 
             case 'eat':
-                if ($this->actors->alterInventory('food', -1) === true) {
-                    $this->actors->calculatePassiveStatChange();
-                    $this->actors->alterStat('fp', +12);
-                } else {
-                    $this->addError('Not enough food!');
-                    return false;
-                }
+                
+                $this->actors[$actor]->calculatePassiveStatChange();
+                $this->actors[$actor]->eat();//handle no food error
+                break;
+
+            case 'sell':
+                $this->actors[$actor]->sell();
+                break;
+                
+            case 'wait':
+                $this->actors[$actor]->calculatePassiveStatChange();
+                $this->actors[$actor]->wait();
+                break;
+
+            case 'rest':
+                $this->actors[$actor]->calculatePassiveStatChange();
+                $this->actors[$actor]->rest();
                 break;
 
             case 'restart':
                 $player = $this->resetPlayer();
-                $this->actors = $player;
+                $this->actors['player'] = $player;
                 break;
             default:
                 $this->addError('Unrecognized command.<br>');
@@ -56,7 +57,7 @@ class Game {
     }
 
     function showActorControls() {
-        if ($this->actors->effects['alive'] == true) {
+        if ($this->actors['player']->effects['alive'] == true) {
             $this->showMainControls();
         } else {
             $this->showRestartControls();
@@ -68,6 +69,7 @@ class Game {
         "<form action='index.php' method='post' >" .
         $this->showForageControls() .
         $this->showEatControls() .
+        $this->showSellControls() .
         $this->showWaitControls() .
         $this->showRestControls() .
         $this->showRestartControls() . //temporary
@@ -80,6 +82,10 @@ class Game {
 
     function showEatControls() {
         return "<button type='submit' name='action' value='eat' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Eat </button>";
+    }
+    
+    function showSellControls() {
+        return "<button type='submit' name='action' value='sell' class='w3-button w3-theme-d2 w3-margin-bottom'><i class='fa fa-comment'></i> Sell </button>";
     }
 
     function showWaitControls() {
@@ -97,12 +103,10 @@ class Game {
     function displayErrors() {
         if (!empty($this->errors)) {
             print_r($this->errors);
-//            exit;
         }
     }
 
     function saveState() {
-        echo 'saveState<br>';
         file_put_contents("config.php", "<?php 
                 $" . "gameState = '" . serialize($this->gameState) . "';
                 $" . "actors = '" . serialize($this->actors) . "';");
@@ -114,22 +118,23 @@ class Game {
 
     function resetPlayer() {
 
-        $actors['player'] = new Player(
+        $player = new Player(
                 $type = 'player', $name = 'Faggot', $effects = array('alive' => true), $stats = array(
-            'hp' => 63,
-            'hp_max' => 65,
-            'ep' => 75,
-            'ep_max' => 85,
-            'fp' => 40,
-            'fp_max' => 70,
+            'hp' => 70,
+            'hp_max' => 75,
+            'ep' => 70,
+            'ep_max' => 75,
+            'fp' => 70,
+            'fp_max' => 75,
+            'carry_max' => 50
 //            'strength' => 70,
 //            'agility' => 70,
 //            'dexterity' => 85,
 //            'endurance' => 60,
 //            'speed' => 70
-                ), $inventory = array()
+                ), $inventory = array('food' => 0)
         );
-        return $actors;
+        return $player;
     }
 
 }
